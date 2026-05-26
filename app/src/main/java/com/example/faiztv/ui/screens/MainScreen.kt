@@ -37,12 +37,15 @@ import coil.compose.AsyncImage
 import com.example.faiztv.data.model.ContentItem
 import com.example.faiztv.ui.viewmodel.MainViewModel
 import com.example.faiztv.ui.viewmodel.UiState
+import com.example.faiztv.utils.RssItem
+import androidx.compose.ui.platform.LocalUriHandler
 
 enum class AppTab(val title: String, val icon: ImageVector) {
     HOME("الرئيسية", Icons.Default.Home),
     LIVE("البث المباشر", Icons.Default.LiveTv),
     MOVIES("أفلام", Icons.Default.Movie),
-    SERIES("مسلسلات", Icons.Default.Tv)
+    SERIES("مسلسلات", Icons.Default.Tv),
+    SPORTS("رياضة", Icons.Default.Tv)
 }
 
 val DarkBg = Color(0xFF050505)
@@ -88,6 +91,7 @@ fun MainScreen(
                 AppTab.LIVE -> LiveTvContent(viewModel, onNavigateToPlayer)
                 AppTab.MOVIES -> MoviesContent(viewModel, onNavigateToPlayer)
                 AppTab.SERIES -> SeriesContent(viewModel, onNavigateToPlayer)
+                AppTab.SPORTS -> SportsContent(viewModel)
             }
         }
     }
@@ -150,6 +154,68 @@ fun SeriesContent(viewModel: MainViewModel, onNavigateToPlayer: (String) -> Unit
         }
         item {
             ContentRowGridStyle(seriesState, onNavigateToPlayer)
+        }
+    }
+}
+
+@Composable
+fun SportsContent(viewModel: MainViewModel) {
+    val sportsNewsState = viewModel.sportsNewsState.collectAsState().value
+    val uriHandler = LocalUriHandler.current
+
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            HeaderTitle("أخبار ومباريات الرياضة")
+        }
+        when (sportsNewsState) {
+            is UiState.Loading -> item {
+                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = BrandRed)
+                }
+            }
+            is UiState.Error -> item {
+                Text("حدث خطأ أثناء جلب الأخبار الرياضية", color = Color.White, modifier = Modifier.padding(16.dp))
+            }
+            is UiState.Success -> {
+                items(sportsNewsState.data) { news ->
+                    SportsNewsCard(news = news) {
+                        uriHandler.openUri(news.link)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SportsNewsCard(news: RssItem, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.02f else 1f)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
+            .focusable(interactionSource = interactionSource),
+        shape = RoundedCornerShape(12.dp),
+        border = if (isFocused) BorderStroke(2.dp, BrandGold) else BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+            AsyncImage(
+                model = news.imageUrl ?: "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e",
+                contentDescription = news.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.width(120.dp).fillMaxHeight()
+            )
+            Column(modifier = Modifier.padding(12.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                Text(text = news.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = news.description.take(100).replace(Regex("<.*?>"), "") + "...", color = Color.Gray, fontSize = 12.sp, maxLines = 2)
+            }
         }
     }
 }
@@ -302,7 +368,7 @@ fun TvFocusableCard(item: ContentItem, isSquare: Boolean, onClick: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
-                model = item.imageUrl ?: "https://images.unsplash.com/photo-1594909122845-11baa439b7bf",
+                model = if (!item.imageUrl.isNullOrEmpty()) item.imageUrl else "https://picsum.photos/seed/${item.id}/300/400",
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

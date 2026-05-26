@@ -6,6 +6,8 @@ import com.example.faiztv.data.model.Category
 import com.example.faiztv.data.model.ContentItem
 import com.example.faiztv.data.repository.ContentRepository
 import com.example.faiztv.utils.M3uParser
+import com.example.faiztv.utils.RssItem
+import com.example.faiztv.utils.RssParser
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,9 @@ class MainViewModel : ViewModel() {
 
     private val _seriesState = MutableStateFlow<UiState<List<ContentItem>>>(UiState.Loading)
     val seriesState: StateFlow<UiState<List<ContentItem>>> = _seriesState.asStateFlow()
+    
+    private val _sportsNewsState = MutableStateFlow<UiState<List<RssItem>>>(UiState.Loading)
+    val sportsNewsState: StateFlow<UiState<List<RssItem>>> = _sportsNewsState.asStateFlow()
 
     private val m3uSources = listOf(
         "https://iptv-org.github.io/iptv/languages/ara.m3u",
@@ -53,6 +58,7 @@ class MainViewModel : ViewModel() {
         fetchChannels()
         fetchMovies()
         fetchSeries()
+        fetchSportsNews()
     }
 
     private fun fetchFeatured() = viewModelScope.launch {
@@ -98,5 +104,19 @@ class MainViewModel : ViewModel() {
             onSuccess = { _seriesState.value = UiState.Success(it) },
             onFailure = { _seriesState.value = UiState.Error(it.message ?: "Unknown Error") }
         )
+    }
+
+    private fun fetchSportsNews() = viewModelScope.launch {
+        _sportsNewsState.value = UiState.Loading
+        val feeds = listOf(
+            "https://www.goal.com/feeds/en/news"
+        )
+        val deferred = feeds.map { url -> async { RssParser.parseFeed(url) } }
+        val results = deferred.awaitAll().flatten()
+        if (results.isNotEmpty()) {
+            _sportsNewsState.value = UiState.Success(results)
+        } else {
+            _sportsNewsState.value = UiState.Error("Failed to load sports news")
+        }
     }
 }
